@@ -1,0 +1,55 @@
+name: Docker Image
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+  schedule: 
+   - cron: '0 0 * */3 *'
+  workflow_dispatch:
+
+jobs:
+  Build:
+    strategy:
+      matrix:
+        GCC_VER: [13, 12, 11, 10, 9]
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Login to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+    - name: Login to GHCR
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.repository_owner }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v3
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    - name: Set tags metadata
+      uses: docker/metadata-action@v5
+      id: meta
+      with:
+        images: |
+          ${{ secrets.DOCKERHUB_USERNAME }}/${{ vars.IMAGE_NAME }}
+          ghcr.io/${{ github.repository_owner }}/${{ vars.IMAGE_NAME }}
+        tags: |
+          gcc${{ matrix.GCC_VER }}
+          ${{ strategy.job-index == 0 && 'latest' || '' }}
+    - name: Build And Push Docker Image
+      uses: docker/build-push-action@v5
+      id: build
+      with:
+        push: true
+        context: .
+        build-args: |
+          GCC_VERS=${{ matrix.GCC_VER }}
+        platforms: linux/amd64,linux/arm64
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}

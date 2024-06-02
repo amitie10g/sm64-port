@@ -1,4 +1,5 @@
-FROM ubuntu:18.04 as build
+ARG GCC_VERS=13
+FROM gcc:$GCC_VERS as build
 
 RUN apt-get update && \
     apt-get install -y \
@@ -13,9 +14,8 @@ RUN apt-get update && \
         pkgconf \
         python3
 
-RUN mkdir /sm64
-WORKDIR /sm64
+COPY / /sm64
 ENV PATH="/sm64/tools:${PATH}"
 
-CMD echo 'usage: docker run --rm --mount type=bind,source="$(pwd)",destination=/sm64 sm64 make VERSION=us -j4\n' \
+CMD echo 'usage: docker run --rm -v $(pwd)/build:/sm64/build make VERSION=us -j4\n' \
          'see https://github.com/n64decomp/sm64/blob/master/README.md for advanced usage'

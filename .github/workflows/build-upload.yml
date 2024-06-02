@@ -1,0 +1,83 @@
+name: Build and upload to Google Drive
+on:
+  pull_request:
+    branches: [ "master" ]
+  workflow_dispatch:
+    inputs:
+      lang:
+        description: "Select ROM language ('us', 'eu' or 'jp')"
+        type: choice
+        required: true
+        default: us
+        options:
+          - us
+          - eu
+          - jp
+      source:
+        description: "Source File ID"
+        required: true
+      target:
+        description: "Target Folder ID"
+jobs:
+  build-upload:
+    strategy:
+      matrix:
+        os: ['windows', 'ubuntu']
+    runs-on: ${{ matrix.os }}-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          repository: 'sm64-port/sm64-port'
+
+      - name: Install dependencies
+        uses: amitie10g/install-package@v1
+        with:
+          apt: >
+            binutils-mips-linux-gnu
+            libaudiofile-dev
+            libsdl2-dev
+            libusb-1.0-0-dev
+            libx11-dev
+            libcapstone-dev
+            pkgconf
+          #  bsdmainutils
+          pacman: git make python3
+          msystem: mingw64
+      - name: Install further dependencies (Windows)
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: >
+          pacman --noconfirm -U
+          https://repo.msys2.org/mingw/mingw64/mingw-w64-x86_64-gcc-13.2.0-6-any.pkg.tar.zst
+          https://repo.msys2.org/mingw/mingw64/mingw-w64-x86_64-gcc-libs-13.2.0-6-any.pkg.tar.zst
+
+      - name: Hide sinsitive data
+        uses: levibostian/action-hide-sensitive-inputs@v1
+        with:
+          exclude_inputs: lang
+
+      - name: Download file from Google Drive
+        uses: Fork-on-the-Table-Collective/upload-to-download-from-gdrive@master
+        with:
+          credentials: ${{ secrets.GSA_CREDENTIALS }}
+          actionType: download
+          localPath: baserom.${{ github.event.inputs.lang }}.z64
+          googleFileId: ${{ github.event.inputs.source }}
+
+      - name: Build (Linux)
+        if: runner.os == 'Linux'
+        run: make
+
+      - name: Build (Windos)
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: make
+
+      - name: Upload file to Google Drive
+        uses: Fork-on-the-Table-Collective/upload-to-download-from-gdrive@master
+        with:
+          credentials: ${{ secrets.GSA_CREDENTIALS }}
+          actionType: upload
+          localPath: build/${{ github.event.inputs.lang }}_pc/sm64.${{ github.event.inputs.lang }}${{ runner.os == 'Windows' && '.exe' || ''}}
+          googleFolderId: ${{ github.event.inputs.target }}
